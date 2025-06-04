@@ -439,9 +439,9 @@ hypothesis(model_complete, "WeeksW3 -WeeksW2 = 0")
 
     ## Hypothesis Tests for class b:
     ##              Hypothesis Estimate Est.Error CI.Lower CI.Upper Evid.Ratio
-    ## 1 (WeeksW3-WeeksW2) = 0     1.49      0.87    -0.19     3.22       0.94
+    ## 1 (WeeksW3-WeeksW2) = 0     1.49      0.87    -0.19     3.22        0.9
     ##   Post.Prob Star
-    ## 1      0.49     
+    ## 1      0.47     
     ## ---
     ## 'CI': 90%-CI for one-sided and 95%-CI for two-sided hypotheses.
     ## '*': For one-sided hypotheses, the posterior probability exceeds 95%;
@@ -519,7 +519,7 @@ hypothesis(model_complete, "Age > 0")
     ## for two-sided hypotheses, the value tested against lies outside the 95%-CI.
     ## Posterior probabilities of point hypotheses assume equal prior probabilities.
 
-# Type II sum of Squares
+# Creating necessary models for Type-II comparison
 
 ``` r
 model.fit.rdwg <- update(model_complete, 
@@ -597,193 +597,63 @@ model.fit.rg <- add_criterion(model.fit.rg,
                                 criterion = "loo",
                                 file = 'models_Exp_2/model_rg', 
                                 core = 16)
+```
 
+# Calculating Bayes factors
+
+``` r
 BF_rdwg = bayes_factor(model_complete, model.fit.rdwg)
-```
-
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-    ## Iteration: 8
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-
-``` r
 BF_rwg = bayes_factor(model.fit.rdwg, model.fit.rwg)
-```
-
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-    ## Iteration: 8
-    ## Iteration: 9
-
-``` r
 BF_rdw = bayes_factor(model.fit.rdwg, model.fit.rdw)
-```
-
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-
-``` r
 BF_rdg = bayes_factor(model.fit.rdwg, model.fit.rdg)
-```
-
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-    ## Iteration: 8
-    ## Iteration: 9
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-
-``` r
 BF_rd = bayes_factor(model.fit.lvl1, model.fit.rd)
-```
-
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-    ## Iteration: 8
-    ## Iteration: 9
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-    ## Iteration: 8
-    ## Iteration: 9
-    ## Iteration: 10
-
-``` r
 BF_rw = bayes_factor(model.fit.lvl1, model.fit.rw)
-```
-
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-    ## Iteration: 8
-    ## Iteration: 9
-    ## Iteration: 10
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-    ## Iteration: 8
-    ## Iteration: 9
-    ## Iteration: 10
-
-``` r
 BF_rg = bayes_factor(model.fit.lvl1, model.fit.rg)
 ```
 
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
-    ## Iteration: 1
-    ## Iteration: 2
-    ## Iteration: 3
-    ## Iteration: 4
-    ## Iteration: 5
-    ## Iteration: 6
-    ## Iteration: 7
+# Presenting Bayes factors and model comparisons
 
 ``` r
 BF_rd
 ```
 
-    ## Estimated Bayes factor in favor of model.fit.lvl1 over model.fit.rd: 0.08615
+    ## Estimated Bayes factor in favor of model.fit.lvl1 over model.fit.rd: 0.06954
 
 ``` r
 BF_rw
 ```
 
-    ## Estimated Bayes factor in favor of model.fit.lvl1 over model.fit.rw: 3206.74490
+    ## Estimated Bayes factor in favor of model.fit.lvl1 over model.fit.rw: 3178.67871
 
 ``` r
 BF_rg
 ```
 
-    ## Estimated Bayes factor in favor of model.fit.lvl1 over model.fit.rg: 2023054.89417
+    ## Estimated Bayes factor in favor of model.fit.lvl1 over model.fit.rg: 2104818.33493
 
 ``` r
 BF_rdg
 ```
 
-    ## Estimated Bayes factor in favor of model.fit.rdwg over model.fit.rdg: 16.00856
+    ## Estimated Bayes factor in favor of model.fit.rdwg over model.fit.rdg: 16.64472
 
 ``` r
 BF_rdw
 ```
 
-    ## Estimated Bayes factor in favor of model.fit.rdwg over model.fit.rdw: 0.05968
+    ## Estimated Bayes factor in favor of model.fit.rdwg over model.fit.rdw: 0.05233
 
 ``` r
 BF_rwg
 ```
 
-    ## Estimated Bayes factor in favor of model.fit.rdwg over model.fit.rwg: 419096948.29752
+    ## Estimated Bayes factor in favor of model.fit.rdwg over model.fit.rwg: 502574108.18199
 
 ``` r
 BF_rdwg
 ```
 
-    ## Estimated Bayes factor in favor of model_complete over model.fit.rdwg: 0.10232
+    ## Estimated Bayes factor in favor of model_complete over model.fit.rdwg: 0.12007
 
 ``` r
 loo(model_complete)
