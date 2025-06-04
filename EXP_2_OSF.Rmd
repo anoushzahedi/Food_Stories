@@ -1,0 +1,308 @@
+---
+title: "Behavior_Second_Study"
+author: "A.Z."
+date: "2024-06-03"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(psych)
+library(brms)
+library(readxl)
+library(stringr)
+library(sjPlot)
+```
+
+# Reading the second dataset
+```{r}
+data_con <- read_xlsx(path = "EXP_2.xlsx", sheet = "Control Group", na = 'NA')%>%
+  pivot_longer(cols = c(3:17),
+               names_to = c("Weeks ", "Days"), 
+               names_sep = "_",
+               values_to = "Choice")%>%
+  mutate(Group = "Con")
+
+data_exp <- read_xlsx(path = "EXP_2.xlsx", sheet = "Experimental Group", na = 'NA')%>%
+    pivot_longer(cols = c(3:17),
+               names_to = c("Weeks ", "Days"), 
+               names_sep = "_",
+               values_to = "Choice")%>%
+  mutate(Group = "Exp")
+
+data_full <- rbind(data_con, data_exp) %>%
+  mutate(Choice = if_else(Choice == "S", 0, 1))%>%
+  mutate(Weeks = as.factor(`Weeks `))%>%
+  relocate(Weeks, .before = `Weeks `)%>%
+  select(!`Weeks `)%>%
+  mutate(ID = as.factor(ID))%>%
+  mutate(Group = as.factor(Group))%>%
+  filter(!is.na(Choice))%>%
+  mutate(Days = as.numeric(Days))
+  
+
+```
+
+# Plotting
+
+```{r}
+
+gd <- data_full %>%
+        mutate(Days = as.numeric(Days))%>%
+        mutate(Weeks = fct_recode(Weeks, 'Week 1' = 'W1'))%>%
+        mutate(Weeks = fct_recode(Weeks, 'Week 2' = 'W2'))%>%
+        mutate(Weeks = fct_recode(Weeks, 'Week 3&4' = 'W3'))%>%
+        # mutate(Days = ifelse(Weeks == "W2", Days + 5, ifelse(Weeks == "W3", Days + 10, Days )))%>%
+        # mutate(Days = as.factor(Days))%>%
+        group_by(Group, Days, Weeks) %>%
+        summarise(Choice_sum = sum(Choice), Mean = mean(Choice), sd = sqrt(35 * Mean * (1 - Mean)))
+
+
+ggplot(data = gd, aes(x = Days , y = Choice_sum, color = Group))+
+  geom_line(aes(group = Group, linetype = Weeks), alpha = .9,size = 3)+
+  scale_linetype_manual(values=c("dotted", "solid", "twodash"), labels = c("Baseline", "Narratives", "Longevity")) +
+  geom_ribbon(aes(y = Choice_sum, ymin = Choice_sum - sd, ymax = Choice_sum + sd), alpha = .2)+
+  theme_bw()+
+  facet_grid(~Weeks)+
+  scale_y_continuous(breaks = seq(0, 30, by = 6),labels = function(x) paste0((x/30)*100, "%"))+
+  scale_x_continuous(breaks = seq(1, 5, by = 1))+
+  labs(title = "Choices across Days",
+    y = "Percentage of Healthy Choices",
+    color = NULL)+
+  guides(linetype=guide_legend(keywidth = 3, keyheight = 1),
+    colour=guide_legend(keywidth = 3, keyheight = 1))
+
+ggsave('Exp2.jpeg', plot = last_plot())
+```
+
+
+# Modeling using Bayesian
+```{r}
+library(brms)
+model_complete <- bf(Choice ~ Days*Weeks*Group + (1 + Days + Weeks |ID) + Age, 
+                family = bernoulli(link = logit))
+
+get_prior(model_complete, data = data_full)
+prior_complete <- set_prior("normal(0,2.5)", class = "b")
+model_complete <- brm(formula = model_complete,
+                      prior = prior_complete,
+                      data = data_full,
+                      warmup = 2000, 
+                      iter = 6000, 
+                      sample_prior = TRUE,
+                      save_pars = save_pars(all = TRUE),
+                      chains = 5,
+                      control = list(adapt_delta = 0.99),
+                      core = 16,
+                      file = 'models_Exp_2/model_complete')
+
+model_complete <- add_criterion(model_complete,
+                                criterion = "loo",
+                                file = 'models_Exp_2/model_complete', 
+                                core = 16)
+
+```
+  
+# Checking the Bayes model
+
+```{r}
+
+summary(model_complete)
+
+numdraw <- 50
+pp_check(model_complete, 
+         type = "bars_grouped",
+         group = "Group",
+         ndraws = numdraw)
+
+mcmc_plot(model_complete,
+          variable = variables(model_complete)[c(1:13)],
+          HPD = TRUE)+
+  labs(title = expression(paste("Posterior Distributions of ",italic(beta), "s")))+
+  # scale_y_discrete(labels=rev(c(
+  # "Mod_sin",
+  # "Mod_evec",
+  # "Pos",
+  # "Pos:Mod_sin",
+  # "Pos:Mod_evec")), limits = rev,
+  # guide = guide_axis(n.dodge = 2))+
+  geom_vline(xintercept = c(0), linetype = "dashed") +
+  theme_bw(10)+
+  theme(axis.text.y = element_text(angle = 0, hjust = .5))
+```
+
+# Checking multicolinearity in the Bayes model
+
+```{r}
+library(hexbin)
+mcmc_plot(
+  model_complete,
+  variable = variables(model_complete)[1:6],
+  type = 'pairs',
+  diag_fun = 'dens',
+  off_diag_fun = 'hex',
+  fixed = TRUE)
+```
+
+# Checking hypothesis for Bayes
+```{r}
+data_full %>%
+  group_by(Group)%>%
+  summarise(mean = mean(Choice), sd = sd(Choice))
+
+hypothesis(model_complete, "GroupExp > 0")
+
+data_full %>%
+  group_by(Weeks, Group)%>%
+  summarise(mean = mean(Choice), sd = sd(Choice))
+
+hypothesis(model_complete, "WeeksW2 = 0")
+hypothesis(model_complete, "WeeksW3 = 0")
+hypothesis(model_complete, "WeeksW3 -WeeksW2 = 0")
+
+hypothesis(model_complete, "GroupExp > 0")
+hypothesis(model_complete, "WeeksW2:GroupExp > 0")
+hypothesis(model_complete, "WeeksW3:GroupExp > 0")
+
+hypothesis(model_complete, "Days:GroupExp < 0")
+
+hypothesis(model_complete, "Age > 0")
+```
+
+# Creating necessary models for Type-II comparison
+```{r}
+model.fit.rdwg <- update(model_complete, 
+                       formula = ~ . -Days:Weeks:Group, 
+                       core = 16,
+                       file = 'models_Exp_2/model_rdwg')
+model.fit.rdwg <- add_criterion(model.fit.rdwg,
+                                criterion = "loo",
+                                file = 'models_Exp_2/model_rdwg', 
+                                core = 16)
+
+model.fit.rwg <- update(model_complete, 
+                       formula = ~ . -Weeks:Group -Days:Weeks:Group, 
+                       core = 16,
+                       file = 'models_Exp_2/model_rwg')
+model.fit.rwg <- add_criterion(model.fit.rwg,
+                                criterion = "loo",
+                                file = 'models_Exp_2/model_rwg', 
+                                core = 16)
+
+model.fit.rdw <- update(model_complete, 
+                       formula = ~ . -Days:Weeks -Days:Weeks:Group, 
+                       core = 16,
+                       file = 'models_Exp_2/model_rdw')
+model.fit.rdw <- add_criterion(model.fit.rdw,
+                                criterion = "loo",
+                                file = 'models_Exp_2/model_rdw', 
+                                core = 16)
+
+model.fit.rdg <- update(model_complete, 
+                       formula = ~ . -Days:Group -Days:Weeks:Group, 
+                       core = 16,
+                       file = 'models_Exp_2/model_rdg')
+model.fit.rdg <- add_criterion(model.fit.rdg,
+                                criterion = "loo",
+                                file = 'models_Exp_2/model_rdg', 
+                                core = 16)
+
+model.fit.lvl1 <- update(model_complete, 
+                       formula = ~ . 
+                       -Days:Group 
+                       -Days:Weeks 
+                       -Weeks:Group
+                       -Days:Weeks:Group, 
+                       core = 16,
+                       file = 'models_Exp_2/model_lvl1')
+model.fit.lvl1 <- add_criterion(model.fit.lvl1,
+                                criterion = "loo",
+                                file = 'models_Exp_2/model_lvl1', 
+                                core = 16)
+
+model.fit.rd <- update(model.fit.lvl1, 
+                       formula = ~ . -Days, 
+                       core = 16,
+                       file = 'models_Exp_2/model_rd')
+model.fit.rd <- add_criterion(model.fit.rd,
+                                criterion = "loo",
+                                file = 'models_Exp_2/model_rd', 
+                                core = 16)
+
+model.fit.rw <- update(model.fit.lvl1, 
+                       formula = ~ . -Weeks, 
+                       core = 16,
+                       file = 'models_Exp_2/model_rw')
+model.fit.rw <- add_criterion(model.fit.rw,
+                                criterion = "loo",
+                                file = 'models_Exp_2/model_rw', 
+                                core = 16)
+
+model.fit.rg <- update(model.fit.lvl1, 
+                       formula = ~ . -Group, 
+                       core = 16,
+                       file = 'models_Exp_2/model_rg')
+model.fit.rg <- add_criterion(model.fit.rg,
+                                criterion = "loo",
+                                file = 'models_Exp_2/model_rg', 
+                                core = 16)
+```
+
+# Calculating Bayes factors 
+```{r echo = T, results = 'hide'}
+BF_rdwg = bayes_factor(model_complete, model.fit.rdwg)
+BF_rwg = bayes_factor(model.fit.rdwg, model.fit.rwg)
+BF_rdw = bayes_factor(model.fit.rdwg, model.fit.rdw)
+BF_rdg = bayes_factor(model.fit.rdwg, model.fit.rdg)
+BF_rd = bayes_factor(model.fit.lvl1, model.fit.rd)
+BF_rw = bayes_factor(model.fit.lvl1, model.fit.rw)
+BF_rg = bayes_factor(model.fit.lvl1, model.fit.rg)
+```
+
+# Presenting Bayes factors and model comparisons
+```{r}
+BF_rd
+BF_rw
+BF_rg
+BF_rdg
+BF_rdw
+BF_rwg
+BF_rdwg
+
+loo(model_complete)
+loo(model.fit.rdwg)
+loo(model.fit.rwg)
+loo(model.fit.rdw)
+loo(model.fit.rdg)
+loo(model.fit.rg)
+loo(model.fit.rd)
+loo(model.fit.rw)
+
+loo_compare(model_complete,
+            model.fit.rdwg)
+
+loo_compare(model.fit.rdwg,
+            model.fit.rwg,
+            model.fit.rdw,
+            model.fit.rdg)
+
+loo_compare(model.fit.lvl1,
+            model.fit.rg,
+            model.fit.rw)
+
+loo_compare(model.fit.lvl1,
+            model.fit.rd)
+```
+
+
+
+
+
