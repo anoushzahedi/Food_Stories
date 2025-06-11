@@ -1,9 +1,7 @@
 # Food_Stories
 
-The impact of a fairytale-like story on the food choices 
-of preschool children
-
-
+The impact of a fairytale-like story on the 
+food choices of preschool children
 
 The ongoing obesity epidemic is an indicator that traditional 
 efforts towards diet change are insufficient, and interventions
@@ -32,7 +30,6 @@ two weeks. These findings demonstrate that appropriate narratives
 about food can have a strong and lasting effect on the healthy 
 food choices of preschool children and might promote healthy food 
 consumption if incorporated into nutrition education.
-
 
 Zahedi, A., Katembu, S., Sind, S. M., Sommer, U., 
 Kimamo, C., & Sommer, W. (2025). 
