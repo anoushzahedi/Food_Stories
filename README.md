@@ -1,7 +1,7 @@
 # Food_Stories
 
 The impact of a fairytale-like story on the 
-food choices of preschool children new
+food choices of preschool children
 
 
 The ongoing obesity epidemic is an indicator that traditional 
