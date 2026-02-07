@@ -1,0 +1,265 @@
+---
+title: "Data"
+author: "A.Z."
+date: "2023-06-13"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(psych)
+library(brms)
+library(readxl)
+library(stringr)
+library(sjPlot)
+```
+
+# Reading the data
+
+```{r}
+
+Data <- read_xlsx(path = "EXP_1.xlsx")%>%
+  mutate(FIVE = as.numeric(FIVE))%>%
+  pivot_longer(cols = c(2:10), 
+               names_to = "Group", 
+               values_to = "Choice")%>%
+  rename(Day = "...1")%>%
+  mutate(Treatment  =  
+           if_else(Day %in% 
+                     c("DAY 1", "DAY 2", "DAY 3", "DAY 4", "DAY 5"), "Baseline", 
+                   if_else(Day %in% 
+                             c("DAY 6", "DAY 7", "DAY 8", "DAY 9", "DAY 10"), 
+                           if_else(Group %in% 
+                                     c("ONE", "TWO", "THREE", "FOUR","FIVE"),
+                                   "Experimental", "Control"),
+                                          if_else(!(Group %in% 
+                                                      c("ONE", "TWO", "THREE", "FOUR","FIVE")),
+                                                  "Experimental", "Control"))))%>%
+  mutate(Day = str_split(Day, " ") %>% map_chr(., 2))%>%
+  mutate(Day = as.integer(Day))%>%
+  filter(Group != "FIVE")%>%
+  mutate(Order = if_else(Group %in% c("ONE", "TWO", "THREE", "FOUR"), "BEC" , "BCE"))
+
+```
+
+
+# Plotting
+
+```{r}
+Data2 <- Data %>% 
+        mutate(Week = if_else(Day %in% c(1:5), 'Week 1', if_else(Day %in% c(6:10), 'Week 2' , 'Week 3') ))%>%
+  mutate(Day = ifelse(Day == 6 |Day == 11, 1, 
+                      ifelse(Day == 7 |Day == 12, 2, 
+                             ifelse(Day == 8 |Day == 13,3, 
+                                    ifelse(Day == 9 |Day == 14, 4, 
+                                                    ifelse(Day == 10 |Day == 15, 5, Day))))))
+gd <- Data2%>%
+        group_by(Order, Day, Week) %>% 
+        summarise(Choice_sum = mean(Choice), sd = sd(Choice), Treatment = Treatment)
+
+
+ggplot(data = gd, aes(x = Day, y = Choice_sum, color = Order))+
+  geom_line(aes(linetype = Treatment), alpha = .8, size = 3)+
+  geom_ribbon(aes(y = Choice_sum, ymin = Choice_sum - sd, ymax = Choice_sum + sd), alpha = .2)+
+  scale_linetype_manual(values=c("dotted", "twodash", "solid"), labels = c("Baseline", "Food-Unrelated", "Food-Related")) +
+  theme_bw()+
+  facet_grid(~Week)+
+  scale_y_continuous(breaks = seq(0, 10, by = 2),labels = function(x) paste0((x/10)*100, "%"))+
+  scale_x_continuous(breaks = seq(1, 5, by = 1))+
+  labs(title = "Choices across Days",
+    y = "Percentage of Healthy Choices",
+    color = NULL)  +
+  guides(linetype=guide_legend(keywidth = 3, keyheight = 1),
+    colour=guide_legend(keywidth = 3, keyheight = 1))
+ggsave('Exp1.jpeg', plot = last_plot())
+```
+
+
+
+# Bayesian Modeling
+```{r}
+Data_uncontinous <- Data %>%
+  mutate(Day = ifelse(Day == 6 |Day == 11, 1, 
+                      ifelse(Day == 7 |Day == 12, 2, 
+                             ifelse(Day == 8 |Day == 13,3, 
+                                    ifelse(Day == 9 |Day == 14, 4, 
+                                                    ifelse(Day == 10 |Day == 15, 5, Day))))))
+
+Exp1_formula <- bf(formula = Choice ~ Day*Order*Treatment + 
+                     (1|Group), 
+                   family = negbinomial(link = "log", link_shape = "log"))
+get_prior(Exp1_formula, data = Data_uncontinous)
+
+Exp1_priors <- set_prior("normal(0,2.5)", class = "b")
+
+Exp_model <- brm(formula = Exp1_formula,
+                 data = Data_uncontinous,
+                 prior = Exp1_priors,
+                 chains = 5,
+                 iter = 6000,
+                 warmup = 2000,
+                 sample_prior = TRUE,
+                 save_pars = save_pars(all = TRUE),
+                 control = list(adapt_delta = 0.99),
+                 core = 16,
+                 file = 'models_Exp_1/model_complete') 
+```
+
+```{r}
+summary(Exp_model)
+
+numdraw <- 50
+pp_check(Exp_model, 
+         type = "bars_grouped",
+         group = "Treatment",
+         ndraws = numdraw)
+
+mcmc_plot(Exp_model,
+          variable = variables(Exp_model)[c(1:12)],
+          HPD = TRUE)+
+  labs(title = expression(paste("Posterior Distributions of ",italic(beta), "s")))+
+  # scale_y_discrete(labels=rev(c(
+  # "Mod_sin",
+  # "Mod_evec",
+  # "Pos",
+  # "Pos:Mod_sin",
+  # "Pos:Mod_evec")), limits = rev,
+  # guide = guide_axis(n.dodge = 2))+
+  geom_vline(xintercept = c(0), linetype = "dashed") +
+  theme_bw(10)+
+  theme(axis.text.y = element_text(angle = 0, hjust = .5))
+```
+
+# Checking multicolinearity in the ACC model
+
+```{r}
+mcmc_plot(
+  Exp_model,
+  variable = variables(Exp_model)[2:5],
+  type = 'pairs',
+  diag_fun = 'dens',
+  off_diag_fun = 'hex',
+  fixed = TRUE)
+```
+# Hypotheses
+```{r}
+Data_uncontinous%>%
+  group_by(Treatment)%>%
+  summarise(mean = mean(Choice), sd = sd(Choice))
+
+hypothesis(Exp_model, "TreatmentExperimental > 0")
+hypothesis(Exp_model, "TreatmentExperimental- TreatmentControl> 0")
+hypothesis(Exp_model, "TreatmentControl > 0")
+
+Data_uncontinous%>%
+  group_by(Order)%>%
+  summarise(mean = mean(Choice), sd = sd(Choice))
+hypothesis(Exp_model, "OrderBEC > 0")
+
+hypothesis(Exp_model, "OrderBEC:TreatmentExperimental < 0")
+hypothesis(Exp_model, "OrderBEC:TreatmentControl = 0")
+```
+
+# Creating necessary models for Type-II comparison
+```{r echo = T, results = 'hide'}
+model.fit.rdto <- update(Exp_model, 
+                       formula = ~ . -Day:Order:Treatment, 
+                       core = 16,
+                       file = 'models_Exp_1/model_rdto')
+
+model.fit.rto <- update(Exp_model, 
+                       formula = ~ . -Order:Treatment 
+                       -Day:Order:Treatment, 
+                       core = 16,
+                       file = 'models_Exp_1/model_rto')
+
+model.fit.rdt <- update(Exp_model, 
+                       formula = ~ . -Day:Treatment 
+                       -Day:Order:Treatment,
+                       core = 16,
+                       file = 'models_Exp_1/model_rdt')
+
+model.fit.rdo <- update(Exp_model, 
+                       formula = ~ . -Day:Order 
+                       -Day:Order:Treatment, 
+                       core = 16,
+                       file = 'models_Exp_1/model_rdo')
+
+model.fit.lvl1 <- update(Exp_model, 
+                       formula = ~ . -Order:Treatment
+                       -Day:Order 
+                       -Day:Treatment 
+                       -Day:Order:Treatment,
+                       core = 16,
+                       file = 'models_Exp_1/model_lvl1')
+
+model.fit.rd <- update(Exp_model, 
+                       formula = ~ . -Day
+                       -Day:Order -Day:Treatment -Order:Treatment
+                       -Day:Order:Treatment,
+                       core = 16,
+                       file = 'models_Exp_1/model_rd')
+
+model.fit.rt <- update(Exp_model, 
+                       formula = ~ . -Treatment 
+                       -Day:Order -Day:Treatment -Order:Treatment 
+                       -Day:Order:Treatment, 
+                       core = 16,
+                       file = 'models_Exp_1/model_rt')
+
+model.fit.ro <- update(Exp_model, 
+                       formula = ~ . -Order 
+                       -Day:Order -Day:Treatment -Order:Treatment
+                       -Day:Order:Treatment, 
+                       core = 16,
+                       file = 'models_Exp_1/model_ro')
+```
+
+# Calculating Bayes factors 
+```{r echo = T, results = 'hide'}
+BF_rdto = bayes_factor(Exp_model, model.fit.rdto)
+BF_rto = bayes_factor(model.fit.rdto, model.fit.rto)
+BF_rdt = bayes_factor(model.fit.rdto, model.fit.rdt)
+BF_rdo = bayes_factor(model.fit.rdto, model.fit.rdo)
+BF_rd = bayes_factor(model.fit.lvl1, model.fit.rd)
+BF_rt = bayes_factor(model.fit.lvl1, model.fit.rt)
+BF_ro = bayes_factor(model.fit.lvl1, model.fit.ro)
+```
+
+# Presenting Bayes factors and model comparisons
+```{r}
+BF_rdto
+BF_rto
+BF_rdt
+BF_rdo
+BF_rd
+BF_rt
+BF_ro
+
+loo(Exp_model,
+    model.fit.rdto)
+
+loo(model.fit.rdto,
+    model.fit.rto)
+
+loo(model.fit.rdto,
+    model.fit.rdt)
+    
+loo(model.fit.rdto,
+    model.fit.rdo)
+    
+loo(model.fit.lvl1,
+    model.fit.rt,
+    model.fit.ro)
+
+loo(model.fit.lvl1,
+    model.fit.rd)
+```
